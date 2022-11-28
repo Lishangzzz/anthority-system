@@ -44,7 +44,7 @@
       <el-table-column prop="parentName" label="所属部门" />
       <el-table-column prop="phone" label="部门电话" />
       <el-table-column prop="address" label="部门地址" />
-      <el-table-column label="操作">
+      <el-table-column label="操作" align="center">
         <template slot-scope="scope">
           <el-button
             size="small"
@@ -69,13 +69,13 @@
       :visible="deptDialog.visible"
       :width="deptDialog.width"
       :height="deptDialog.height"
-      @onClose="onClose()"
-      @onConfirm="onConfirm()"
+      @onClose="onClose"
+      @onConfirm="onConfirm"
     >
       <div slot="content">
         <el-form
           :model="dept"
-          rel="deptForm"
+          ref="deptForm"
           :rules="rules"
           label-width="80px"
           :inline="true"
@@ -88,8 +88,8 @@
               @click.native="openSelectDeptWindow()"
             ></el-input>
           </el-form-item>
-          <el-form-item label="部门名称" prop="deparentName">
-            <el-input v-model="dept.deparentName"></el-input>
+          <el-form-item label="部门名称" prop="departmentName">
+            <el-input v-model="dept.departmentName"></el-input>
           </el-form-item>
           <el-form-item label="部门电话">
             <el-input v-model="dept.phone"></el-input>
@@ -110,12 +110,12 @@
       :width="parentDialog.width"
       :height="parentDialog.height"
       @onClose="onParentClose()"
-      @onConfirm="onParenConfirm()"
+      @onConfirm="onParentConfirm()"
     >
       <div slot="content">
         <el-form
           :model="dept"
-          rel="deptForm"
+          ref="deptForm"
           :rules="rules"
           label-width="80px"
           :inline="true"
@@ -173,7 +173,7 @@ export default {
         id: "",
         parentName: "", //所属部门
         pid: "", //所属部门id
-        deparentName: "", //部门名称
+        departmentName: "", //部门名称
         phone: "", //部门电话
         address: "", //部门地址
         orderNum: "", //序号
@@ -215,7 +215,6 @@ export default {
     async search() {
       //发送查询请求
       let res = await departmentApi.getDepartmentList(this.searchModel);
-      console.log(res);
       //判断是否成功
       if (res.success) {
         this.tableData = res.data;
@@ -225,7 +224,6 @@ export default {
      * 窗口关闭事件
      */
     openAddwindow() {
-      console.log(this.$refs);
       //清空表单数据
       this.$resetForm("deptForm", this.dept);
       //设置窗口属性
@@ -242,7 +240,35 @@ export default {
      * 窗口确认事件
      */
     onConfirm() {
-      this.deptDialog.visible = false;
+      //进行表单验证
+      this.$refs.deptForm.validate(async (valid) => {
+        //如果验证通过
+        if (valid) {
+          //初始化res
+          let res = null;
+
+          //判断当前是新增还是修改(依据:判断当前dept对象的id属性值是否为空)
+          if (this.dept.id == "") {
+            //发送新增请求
+            res = await departmentApi.addDept(this.dept);
+          } else {
+            //发送编辑请求
+            res = await departmentApi.updateDept(this.dept);
+          }
+
+          if (res.success) {
+            //提示成功
+            this.$message.success(res.message);
+            //刷新数据
+            this.search();
+            //关闭窗口
+            this.deptDialog.visible = false;
+          } else {
+            //提示失败
+            this.$message.error(res.message);
+          }
+        }
+      });
     },
     /**
      * 选择所属部门取消事件
@@ -253,7 +279,7 @@ export default {
     /**
      * 选择所属部门确认事件
      */
-    onParenConfirm() {
+    onParentConfirm() {
       this.parentDialog.visible = false;
     },
     async openSelectDeptWindow() {
@@ -261,20 +287,56 @@ export default {
       this.parentDialog.visible = true;
       //查询所属部门列表
       let res = await departmentApi.getParentTreeList();
-
-      console.log(res);
       //判断是否成功
       if (res.success) {
         this.treeList = res.data;
       }
     },
+    /**
+     * 编辑部门
+     */
+    handleEdit(row) {
+      //数据回显
+      this.$objCopy(row, this.dept);
+      //设置窗口标题
+      this.deptDialog.title = "编辑部门";
+      //显示窗口
+      this.deptDialog.visible = true;
+    },
+    /**
+     * 删除部门
+     */
+    async handleDelete(row) {
+      //获取当前dept对象
+      let result = await departmentApi.checkDept({ id: row.id });
+      console.log(result);
+      //判断当前dept对象是否存在父级
+      if (!result.success) {
+        //提示不能删除
+        this.$message.warning(result.message);
+      } else {
+        let confirm = await this.$myconfirm("确定要删除该数据吗?");
+        if (confirm) {
+          //发送删除请求
+          let res = await departmentApi.deleteDept({ id: row.id });
+          if (res.success) {
+            //提示成功
+            this.$message.success(res.message);
+            //刷新数据
+            this.search();
+          } else {
+            //提示失败
+            this.$message.error(res.message);
+          }
+        }
+      }
+    },
     handleNodeClick(data) {
-      this.dept.id = data.id;
+      this.dept.pid = data.id;
       this.dept.parentName = data.departmentName;
     },
     changeIcon(data) {
       data.open = !data.open;
-      console.log(this.$refs.parentTree);
       this.$refs.parentTree.store.nodesMap[data.id].expanded = !data.open;
     },
   },
